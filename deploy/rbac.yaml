@@ -1,0 +1,33 @@
+# Least-privilege, read-only access for kubeplumb-mcp.
+# Extend this role only when a new tool needs another resource
+# (for example networkpolicies for evaluate_network_policies).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubeplumb-mcp
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeplumb-mcp-readonly
+rules:
+  - apiGroups: [""]
+    resources: ["services", "pods"]
+    verbs: ["get", "list"]
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubeplumb-mcp-readonly
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubeplumb-mcp-readonly
+subjects:
+  - kind: ServiceAccount
+    name: kubeplumb-mcp
+    namespace: default

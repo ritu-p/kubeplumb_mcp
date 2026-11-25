@@ -1,0 +1,41 @@
+# Broken on purpose: the Service selector has a typo ("wbe"), so it matches no pods.
+# Expected diagnosis from check_service(namespace=scenario-selector, service=web):
+#   verdict=blocked, failed_step=service, reason "selector ... matches no pods"
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: scenario-selector
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: scenario-selector
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: web
+          image: nginx:1.27
+          ports:
+            - name: http
+              containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: scenario-selector
+spec:
+  selector:
+    app: wbe
+  ports:
+    - port: 80
+      targetPort: http
