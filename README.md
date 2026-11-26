@@ -2,9 +2,9 @@
 
 An MCP server that tells on-call engineers **why pod A cannot reach service B** in a Kubernetes cluster.
 
-Most Kubernetes MCP servers hand the model raw `kubectl` output and let it improvise. This one runs deterministic checks along the network path and returns a structured verdict with evidence, so the same question always gets the same answer.
+Most Kubernetes MCP servers hand the model raw `kubectl` output and let it improvise. This one runs deterministic checks along the network path and returns a structured result with evidence
 
-Status: early scaffold. One tool works today.
+Status: One tool works today.
 
 ## Tools
 
@@ -14,7 +14,7 @@ Status: early scaffold. One tool works today.
 | `check_dns` | Planned | Name resolution and CoreDNS health |
 | `evaluate_network_policies` | Planned | Whether egress from the source and ingress to the destination are allowed |
 | `diagnose_connectivity` | Planned | Runs every check in path order and stops at the first failure |
-| `run_probe` | Planned | Live connection test from an ephemeral container, behind user approval |
+| `run_probe` | Planned | Live connection test from an ephemeral container, on user approval |
 
 Every tool returns the same shape:
 
