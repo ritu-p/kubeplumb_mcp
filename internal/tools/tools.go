@@ -5,9 +5,11 @@ package tools
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/rituk/kubeplumb_mcp/internal/diagnose"
@@ -27,6 +29,22 @@ func Register(s *mcp.Server, cs kubernetes.Interface) {
 			"or 503s calling a Service. It does not evaluate NetworkPolicies or DNS.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
 	}, checkService(cs))
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "check_dns",
+		Description: "Check API-visible cluster DNS health. Verifies the kube-system/kube-dns " +
+			"Service, its UDP and TCP port 53, selected pod readiness, and ready EndpointSlice endpoints. " +
+			"It does not perform a DNS query or prove that a particular name resolves.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
+	}, checkDNS(cs))
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "evaluate_network_policies",
+		Description: "Evaluate standard Kubernetes NetworkPolicy ingress and egress rules for a specific " +
+			"source pod to destination pod flow and destination port. Protocol defaults to TCP. " +
+			"CNI-specific policy layers and actual packet delivery are not verified.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
+	}, evaluateNetworkPolicies(cs))
 }
 
 // CheckServiceInput is the argument schema for check_service.
@@ -49,5 +67,60 @@ func checkService(cs kubernetes.Interface) mcp.ToolHandlerFor[CheckServiceInput,
 
 		res, err := diagnose.CheckService(ctx, cs, in.Namespace, in.Service, in.Port)
 		return nil, res, err
+	}
+}
+
+type CheckDNSInput struct{}
+
+func checkDNS(cs kubernetes.Interface) mcp.ToolHandlerFor[CheckDNSInput, diagnose.Result] {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, _ CheckDNSInput) (*mcp.CallToolResult, diagnose.Result, error) {
+		ctx, cancel := context.WithTimeout(ctx, callTimeout)
+		defer cancel()
+
+		res, err := diagnose.CheckDNS(ctx, cs)
+		return nil, res, err
+	}
+}
+
+type EvaluateNetworkPoliciesInput struct {
+	SourceNamespace      string `json:"source_namespace" jsonschema:"namespace of the source pod"`
+	SourcePod            string `json:"source_pod" jsonschema:"name of the source pod"`
+	DestinationNamespace string `json:"destination_namespace" jsonschema:"namespace of the destination pod"`
+	DestinationPod       string `json:"destination_pod" jsonschema:"name of the destination pod"`
+	Port                 int    `json:"port" jsonschema:"destination port number from 1 through 65535"`
+	Protocol             string `json:"protocol,omitempty" jsonschema:"TCP, UDP, or SCTP; defaults to TCP"`
+}
+
+func evaluateNetworkPolicies(cs kubernetes.Interface) mcp.ToolHandlerFor[EvaluateNetworkPoliciesInput, diagnose.Result] {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, in EvaluateNetworkPoliciesInput) (*mcp.CallToolResult, diagnose.Result, error) {
+		if in.SourceNamespace == "" || in.SourcePod == "" ||
+			in.DestinationNamespace == "" || in.DestinationPod == "" {
+			return nil, diagnose.Result{}, errors.New("source and destination namespaces and pod names are required")
+		}
+		if in.Port < 1 || in.Port > 65535 {
+			return nil, diagnose.Result{}, errors.New("destination port must be between 1 and 65535")
+		}
+		protocol := corev1.ProtocolTCP
+		if in.Protocol != "" {
+			protocol = corev1.Protocol(strings.ToUpper(strings.TrimSpace(in.Protocol)))
+		}
+		if protocol != corev1.ProtocolTCP &&
+			protocol != corev1.ProtocolUDP &&
+			protocol != corev1.ProtocolSCTP {
+			return nil, diagnose.Result{}, errors.New("protocol must be TCP, UDP, or SCTP")
+		}
+
+		ctx, cancel := context.WithTimeout(ctx, callTimeout)
+		defer cancel()
+
+		result, err := diagnose.EvaluateNetworkPolicies(ctx, cs, diagnose.NetworkPolicyFlow{
+			SourceNamespace:      in.SourceNamespace,
+			SourcePod:            in.SourcePod,
+			DestinationNamespace: in.DestinationNamespace,
+			DestinationPod:       in.DestinationPod,
+			Port:                 in.Port,
+			Protocol:             protocol,
+		})
+		return nil, result, err
 	}
 }

@@ -4,15 +4,15 @@ An MCP server that tells on-call engineers **why pod A cannot reach service B** 
 
 Most Kubernetes MCP servers hand the model raw `kubectl` output and let it improvise. This one runs deterministic checks along the network path and returns a structured result with evidence
 
-Status: One tool works today.
+Status: Three diagnostic tools are implemented.
 
 ## Tools
 
 | Tool | Status | What it checks |
 |---|---|---|
 | `check_service` | Working | The Service exists, exposes the port, selects Ready pods, resolves named targetPorts, and has ready endpoints |
-| `check_dns` | Planned | Name resolution and CoreDNS health |
-| `evaluate_network_policies` | Planned | Whether egress from the source and ingress to the destination are allowed |
+| `check_dns` | Working | Checks the cluster DNS Service, port 53, CoreDNS pod readiness, and ready endpoints through the Kubernetes API; does not perform a DNS query |
+| `evaluate_network_policies` | Working | Evaluates standard Kubernetes NetworkPolicy egress and ingress for a source pod to destination pod flow and port; does not verify CNI-specific policy layers or packet delivery |
 | `diagnose_connectivity` | Planned | Runs every check in path order and stops at the first failure |
 | `run_probe` | Planned | Live connection test from an ephemeral container, on user approval |
 
@@ -54,6 +54,7 @@ npx @modelcontextprotocol/inspector ./bin/kubeplumb_mcp
 ```
 
 Call `check_service` with namespace `scenario-selector` and service `web`.
+Call `evaluate_network_policies` with the source and destination pod namespaces/names and the destination port to inspect NetworkPolicy decisions for that flow.
 
 ### Connect it to Claude
 

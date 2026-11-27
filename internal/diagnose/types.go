@@ -14,7 +14,9 @@ const (
 
 // Step names identify where on the path a check failed.
 const (
-	StepService = "service"
+	StepService       = "service"
+	StepDNS           = "dns"
+	StepNetworkPolicy = "network_policy"
 )
 
 // Result is the structured verdict every check returns.
